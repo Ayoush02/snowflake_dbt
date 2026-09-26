@@ -1,0 +1,8 @@
+# ==========================================================
+# SchemaChange Configuration
+# ==========================================================
+
+log_level: INFO
+
+# Match the custom versioning convention documented in README.md
+version_number_validation_regex: "^\\d+\\.\\d+\\.\\d+$"

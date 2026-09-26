@@ -1,0 +1,43 @@
+#this file will be at model level and not on folder level
+models:
+  - name: assoc_quotes_companies
+    config:
+      schema: postgres
+      materialized: table
+      transient: false
+
+  - name: assoc_quotes_deals
+    config:
+      schema: postgres
+      materialized: table
+      transient: false
+      
+  - name: customers
+    config:
+      schema: postgres
+      materialized: table
+      transient: false
+
+  - name: deals
+    config:
+      schema: postgres
+      materialized: table
+      transient: false
+      
+  - name: invoice_relation
+    config:
+      schema: postgres
+      materialized: table
+      transient: false
+
+  - name: parsed_quotes
+    config:
+      schema: postgres
+      materialized: table
+      transient: false
+
+  - name: qb_invoices
+    config:
+      schema: postgres
+      materialized: table
+      transient: false

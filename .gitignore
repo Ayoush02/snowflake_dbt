@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+connections.toml
+
+# Logs
+logs/
+*.log
+
+# Secrets and keys written by CI / local deploy
+private_key.pem
+*.pem
+*.p8
+*.key
+.env
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

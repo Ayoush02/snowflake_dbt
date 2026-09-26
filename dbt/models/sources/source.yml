@@ -1,0 +1,12 @@
+sources:
+  - name: postgres
+    database: {{ databases.RAW }}
+    schema: postgres  
+    tables:
+      - name: assoc_quotes_companies
+      - name: customers
+      - name: assoc_quotes_deals
+      - name: deals
+      - name: invoice_relation
+      - name: parsed_quotes
+      - name: qb_invoices

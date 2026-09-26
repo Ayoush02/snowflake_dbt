@@ -1,0 +1,187 @@
+# ==========================================================
+# Snowflake Connection
+# ==========================================================
+
+snowflake:
+  account: ${SNOWFLAKE_ACCOUNT}
+  user: ${SNOWFLAKE_USER}
+
+  role: ACCOUNTADMIN
+  warehouse: COMPUTE_WH
+
+  private_key_path: ${SNOWFLAKE_PRIVATE_KEY_PATH}
+  private_key_passphrase: ""
+# private_key_passphrase: ${SNOWFLAKE_PRIVATE_KEY_PASSPHRASE}
+
+# ==========================================================
+# Snowflake Git Repository
+# ==========================================================
+
+git:
+  repository_name: CONFIG_DB.SECURITY_SCH.CICD_GIT_REPO
+
+  branch:
+    DEV: dev
+    PROD: main
+
+# ==========================================================
+# SchemaChange
+# ==========================================================
+
+schemachange:
+  root_folder: snowflake
+
+  history_table:
+    DEV: CONFIG_DB.SCHEMACHANGE.DEV_CHANGE_HISTORY
+    PROD: CONFIG_DB.SCHEMACHANGE.PROD_CHANGE_HISTORY
+
+  create_change_history_table: true
+  autocommit: true
+  dry_run: false
+
+# ==========================================================
+# Deployment Order
+# Object types are deployed in this order for each target.
+# Folder structure drives database/schema mapping:
+#   snowflake/<object_type>/<database>/<schema>/*.sql
+# Snowflake database name: {ENV}_{database}
+# Snowflake schema name: {schema}
+# ==========================================================
+
+deployment_order:
+  - file_formats
+  - stages
+  - streams
+  - functions
+  - storedprocedures
+  - dynamic_tables
+  - tasks
+  - pipes
+  - snowpark
+  - streamlit
+  - streamlit_apps
+  - grants
+
+# tables/ and views/ are intentionally omitted — dbt models own those objects.
+# streamlit/       — CREATE STREAMLIT SQL (R__*.sql), deployed by SchemaChange
+# streamlit_apps/  — Python app code, sourced from Snowflake Git Repository
+
+# ==========================================================
+# Database layers (Jinja variables for views / dynamic_tables)
+# Resolves at deploy time:
+#   {{ databases.RAW }}        -> DEV_RAW on dev, PROD_RAW on main
+#   {{ databases.TRANSFORM }}  -> DEV_TRANSFORM / PROD_TRANSFORM
+#   {{ databases.CONSUMPTION }} -> DEV_CONSUMPTION / PROD_CONSUMPTION
+# Use in cross-layer SELECTs inside views and dynamic table DDL.
+# ==========================================================
+
+database_layers:
+  - RAW
+  - TRANSFORM
+  - CONSUMPTION
+  - DBT
+
+# ==========================================================
+# Version prefixes for V__ placeholder migrations (first migration in an empty repo).
+# After that, versions are assigned from the repo-wide maximum in change history order.
+# Example: repo max V3.1.0 + V__create_emp_prasad.sql -> V3.2.0__create_emp_prasad.sql
+# ==========================================================
+
+version_prefixes:
+  RAW:
+    POSTGRES: "1.0.0"
+
+# ==========================================================
+# Warehouses (Jinja variables for dynamic_tables / tasks)
+# Resolves at deploy time:
+#   {{ warehouses.DEVELOPER }} -> WH_DEV_DEVELOPER_XS on dev, WH_PROD_DEVELOPER_XS on main
+#   {{ warehouses.ELT }}       -> WH_DEV_ELT_XS on dev, WH_PROD_ELT_XS on main
+# Use in WAREHOUSE = clauses inside dynamic table and task DDL.
+# ==========================================================
+
+warehouses:
+  DEVELOPER:
+    DEV: COMPUTE_WH
+    PROD: COMPUTE_WH
+
+  ELT:
+    DEV: COMPUTE_WH
+    PROD: COMPUTE_WH
+
+# ==========================================================
+# Access roles (Jinja variables for snowflake/grants/**/*.sql)
+# Pattern: AR_{ENV}_{LAYER}_{SCHEMA}_{PRIVILEGE}
+#   ENV:        DEV / PROD (from branch)
+#   LAYER:      RAW / TRF / CON (from folder: RAW, TRANSFORM, CONSUMPTION)
+#   SCHEMA:     CUSTOMERHUB, HUBSPOT, etc. (from schema folder name)
+#   PRIVILEGE:  ALL / RO / RW
+#
+# In grant SQL use:
+#   {{ grant_role }}           -> default RW role for current folder target
+#   {{ access_roles.RW }}      -> explicit read-write role
+#   {{ access_roles.RO }}      -> read-only role
+#   {{ access_roles.ALL }}     -> full access role
+# ==========================================================
+
+access_roles:
+  default_privilege: RW
+
+  layer_codes:
+    RAW: RAW
+    TRANSFORM: TRF
+    CONSUMPTION: CON
+
+  schema_codes:
+    POSTGRES: POSTGRES
+    PROJECTS: PROJECTS_SCH
+    # CUSTOMER_HUB: CUSTOMERHUB
+    # HUBSPOT: HUBSPOT
+    # QUICKBOOKS: QUICKBOOKS
+    # REPORTING: REPORTING
+    # ASANA: ASANA
+    # UTILS: SDT
+
+# ==========================================================
+# dbt Projects on Snowflake
+# SchemaChange runs before `snow dbt deploy` so objects the dbt
+# on-run-end hooks depend on (e.g. RAW.UTILS.SEND_SUCCESS_ALERT /
+# SEND_FAILURE_ALERT) already exist by the time dbt executes.
+# ==========================================================
+
+dbt:
+  project_dir: dbt
+  project_name: DBT
+  database_layer: DBT
+  schema: PROJECTS_SCH
+
+  default_target:
+    DEV: dev
+    PROD: prod
+
+  # Passed to EXECUTE DBT PROJECT on TASK_EXECUTE_DBT (dbt run / build).
+  # Not used by `snow dbt deploy` — that CLI command only publishes the project object.
+  args:
+    DEV: "run --target dev"
+    PROD: "run --target prod"
+
+  # Optional. Leave empty to use Snowflake's default dbt version.
+  # dbt_version: "1.9.4"
+
+  install_local_deps: false
+  external_access_integrations: []
+
+# ==========================================================
+# Logging
+# ==========================================================
+
+logging:
+  level: INFO
+
+# ==========================================================
+# Features
+# ==========================================================
+
+features:
+  validate_before_deploy: true
+  fetch_git_repository: true
+  dbt_deploy: true

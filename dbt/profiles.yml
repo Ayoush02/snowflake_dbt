@@ -1,0 +1,17 @@
+DBT:
+  target: {{ dbt_target }}    # CI already sets this: dev on dev, prod on main
+  outputs:
+    dev:
+      type: snowflake
+      role: ACCOUNTADMIN
+      warehouse: COMPUTE_WH
+      database: DEV_TRANSFORM
+      schema: POSTGRES
+      threads: 8
+    prod:
+      type: snowflake
+      role: ACCOUNTADMIN
+      warehouse: COMPUTE_WH
+      database: PROD_TRANSFORM
+      schema: POSTGRES
+      threads: 8

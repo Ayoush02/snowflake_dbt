@@ -1,0 +1,105 @@
+name: Snowflake Deployment
+
+# 1. snow dbt deploy  — publish dbt/ as a Snowflake dbt project object
+# 2. SchemaChange     — deploy SQL objects, including TASK_EXECUTE_DBT
+# Streamlit in Snowflake:
+#   - streamlit_apps/  Python app (sourced from Snowflake Git Repository)
+#   - streamlit/       CREATE STREAMLIT SQL (deployed after Git FETCH)
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: snowflake-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # Isolated install: snowflake-cli pins jinja2==3.1.6 and connector 4.x,
+          # which conflict with schemachange 4.1.0 in the same venv.
+          pipx install "snowflake-cli==3.25.0"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Create Private Key
+        env:
+          SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
+          SNOWFLAKE_PRIVATE_KEY_BASE64: ${{ secrets.SNOWFLAKE_PRIVATE_KEY_BASE64 }}
+        shell: bash
+        run: |
+          if [ -n "$SNOWFLAKE_PRIVATE_KEY_BASE64" ]; then
+            echo "$SNOWFLAKE_PRIVATE_KEY_BASE64" | base64 -d > private_key.pem
+          elif [ -n "$SNOWFLAKE_PRIVATE_KEY" ]; then
+            printf '%s' "$SNOWFLAKE_PRIVATE_KEY" > private_key.pem
+          else
+            echo "::error::Missing SNOWFLAKE_PRIVATE_KEY or SNOWFLAKE_PRIVATE_KEY_BASE64 secret."
+            exit 1
+          fi
+
+          chmod 600 private_key.pem
+
+          if ! grep -q "BEGIN.*PRIVATE KEY" private_key.pem; then
+            echo "::error::Private key is malformed. Paste the full PEM with line breaks, or store a base64-encoded key as SNOWFLAKE_PRIVATE_KEY_BASE64."
+            exit 1
+          fi
+
+      - name: Assign Migration Versions
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: python -m deployment.assign_versions
+
+      - name: Commit Assigned Migration Versions
+        run: |
+          git add snowflake/
+          if git diff --cached --quiet; then
+            echo "No migration version renames to commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "ci: assign migration version numbers"
+            git push
+          fi
+
+      - name: Deploy dbt Project then Snowflake Objects
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PRIVATE_KEY_PATH: private_key.pem
+          SNOWFLAKE_PRIVATE_KEY_PASSPHRASE: ${{ secrets.SNOWFLAKE_PRIVATE_KEY_PASSPHRASE }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: python -m deployment.deploy --skip-version-assign
+
+      - name: Cleanup
+        if: always()
+        run: rm -f private_key.pem

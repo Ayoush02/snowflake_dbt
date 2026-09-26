@@ -1,0 +1,41 @@
+snapshots:
+  - name: dim_customers
+    relation: ref('eph_customers')
+    config:
+      database: {{ databases.CONSUMPTION }}
+      schema: ANALYTICS
+      strategy: check
+      unique_key: customer_id
+      check_cols:
+        - sync_token
+        - display_name
+        - company_name
+        - fully_qualified_name
+        - print_on_check_name
+        - active
+        - taxable
+        - job
+        - bill_with_parent
+        - is_project
+        - balance
+        - balance_with_jobs
+        - bill_addr_line1
+        - bill_addr_city
+        - bill_addr_state
+        - bill_addr_postal_code
+        - bill_addr_country
+        - ship_addr_line1
+        - ship_addr_city
+        - ship_addr_state
+        - ship_addr_postal_code
+        - ship_addr_country
+        - primary_phone
+        - primary_email
+        - preferred_delivery_method
+        - sales_term_id
+        - sales_term_name
+        - currency_code
+        - default_tax_code_id
+        - notes
+        - updated_dt
+      dbt_valid_to_current: "to_date('9999-12-31')"
